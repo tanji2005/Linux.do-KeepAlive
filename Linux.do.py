@@ -136,6 +136,7 @@ class LinuxDoBrowser:
             exit(1)
 
         self.driver = None
+        self.cookie = None
 
     def create_driver(self):
         try:
@@ -615,8 +616,9 @@ class LinuxDoBrowser:
 
         for i in range(user_count):
             start_time = time.time()
-            self.username = USERNAME[i]
-            self.password = PASSWORD[i]
+            self.username = USERNAME[i] if i < len(USERNAME) else f"账号{i + 1}"
+            self.password = PASSWORD[i] if i < len(PASSWORD) else ""
+            self.cookie = COOKIES[i] if i < len(COOKIES) else None
 
             logging.info(f"▶️▶️▶️  开始执行第{i + 1}个账号: {self.username}")
 
