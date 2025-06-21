@@ -37,18 +37,33 @@ missing_configs = []
 
 username_env = os.getenv("LINUXDO_USERNAME")
 password_env = os.getenv("LINUXDO_PASSWORD")
+cookie_env = os.getenv("LINUXDO_COOKIE")
 
-if not username_env:
-    missing_configs.append("环境变量 'LINUXDO_USERNAME' 未设置或为空")
-if not password_env:
-    missing_configs.append("环境变量 'LINUXDO_PASSWORD' 未设置或为空")
+if not cookie_env:
+    if not username_env:
+        missing_configs.append("环境变量 'LINUXDO_USERNAME' 未设置或为空")
+    if not password_env:
+        missing_configs.append("环境变量 'LINUXDO_PASSWORD' 未设置或为空")
 
 if missing_configs:
     logging.error(f"缺少必要配置: {', '.join(missing_configs)}，请在环境变量中设置。")
     exit(1)
 
-USERNAME = [line.strip() for line in username_env.splitlines() if line.strip()]
-PASSWORD = [line.strip() for line in password_env.splitlines() if line.strip()]
+USERNAME = (
+    [line.strip() for line in username_env.splitlines() if line.strip()]
+    if username_env
+    else []
+)
+PASSWORD = (
+    [line.strip() for line in password_env.splitlines() if line.strip()]
+    if password_env
+    else []
+)
+COOKIES = (
+    [line.strip() for line in cookie_env.splitlines() if line.strip()]
+    if cookie_env
+    else []
+)
 SCROLL_DURATION = int(os.getenv("SCROLL_DURATION", 0))
 VIEW_COUNT = int(os.getenv("VIEW_COUNT", 1000))
 HOME_URL = os.getenv("HOME_URL", "https://linux.do/")
@@ -59,9 +74,9 @@ connect_info = ""
 like_count = 0
 account_info = []
 
-user_count = len(USERNAME)
+user_count = max(len(USERNAME), len(COOKIES))
 
-if user_count != len(PASSWORD):
+if not cookie_env and user_count != len(PASSWORD):
     logging.error("用户名和密码的数量不一致，请检查环境变量设置。")
     exit(1)
 
@@ -231,6 +246,29 @@ class LinuxDoBrowser:
                 pass
             return False
 
+    def login_with_cookie(self, cookie_str: str) -> bool:
+        """使用提供的 cookie 登录"""
+        try:
+            for pair in [c.strip() for c in cookie_str.split(';') if c.strip()]:
+                if '=' not in pair:
+                    continue
+                name, value = pair.split('=', 1)
+                self.driver.add_cookie({
+                    'name': name.strip(),
+                    'value': value.strip(),
+                    'path': '/',
+                    'domain': 'linux.do',
+                })
+            self.driver.refresh()
+            WebDriverWait(self.driver, 10).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "#current-user"))
+            )
+            logging.info("Cookie 登录成功")
+            return True
+        except Exception as e:
+            logging.error(f"Cookie 登录失败: {e}")
+            return False
+
     def load_all_topics(self):
         end_time = time.time() + SCROLL_DURATION
         actions = ActionChains(self.driver)
@@ -339,8 +377,9 @@ class LinuxDoBrowser:
 
         for i in range(user_count):
             start_time = time.time()
-            self.username = USERNAME[i]
-            self.password = PASSWORD[i]
+            self.username = USERNAME[i] if i < len(USERNAME) else f"账号{i + 1}"
+            self.password = PASSWORD[i] if i < len(PASSWORD) else ""
+            self.cookie = COOKIES[i] if i < len(COOKIES) else None
 
             logging.info(f"▶️▶️▶️  开始执行第{i + 1}个账号: {self.username}")
 
@@ -352,10 +391,20 @@ class LinuxDoBrowser:
                 logging.info("导航到 LINUX DO 首页")
                 self.driver.get(HOME_URL)
 
+                logged_in = False
+                if self.cookie:
+                    logged_in = self.login_with_cookie(self.cookie)
+                    if not logged_in:
+                        logging.info("Cookie 登录失败，尝试账号密码登录")
+
                 # 登录
-                if not self.login():
-                    logging.error(f"{self.username} 登录失败")
-                    continue
+                if not logged_in:
+                    if not self.password:
+                        logging.error(f"{self.username} 未提供密码，无法登录")
+                        continue
+                    if not self.login():
+                        logging.error(f"{self.username} 登录失败")
+                        continue
 
                 # 浏览帖子
                 self.click_topic()
@@ -579,9 +628,19 @@ class LinuxDoBrowser:
                 logging.info("导航到 LINUX DO 首页")
                 self.driver.get(HOME_URL)
 
-                if not self.login():
-                    logging.error(f"{self.username} 登录失败")
-                    continue
+                logged_in = False
+                if self.cookie:
+                    logged_in = self.login_with_cookie(self.cookie)
+                    if not logged_in:
+                        logging.info("Cookie 登录失败，尝试账号密码登录")
+
+                if not logged_in:
+                    if not self.password:
+                        logging.error(f"{self.username} 未提供密码，无法登录")
+                        continue
+                    if not self.login():
+                        logging.error(f"{self.username} 登录失败")
+                        continue
 
                 self.click_topic()
                 logging.info(f"🎉 恭喜：{self.username}，帖子浏览全部完成")

@@ -27,9 +27,12 @@ export LINUXDO_USERNAME = "neo@Linux.do
 neo2@Linux.do"
 export LINUXDO_PASSWORD = "IamNeo!
 IamNeo!"
+export LINUXDO_COOKIE = "cookie_for_acc1
+cookie_for_acc2"
 export SCROLL_DURATION = 5 // 首页滚轮滚动时间，控制加载帖子数量，默认为0秒
 export VIEW_COUNT = 1000 // 点赞要求的帖子浏览量，默认大于1000浏览量才进行点赞
 ```
+当 `LINUXDO_COOKIE` 设置时，脚本会使用对应的 Cookie 登录，可省略用户名和密码。
 - 示例图
 ![首次运行示例](https://im.wowyijiu.com/file/7571e84634def1d0a0cea.png)
 ![运行日志](https://im.wowyijiu.com/file/11b45f26c2ae6f3569536.png)
