@@ -138,6 +138,30 @@ class LinuxDoBrowser:
         self.driver = None
         self.cookie = None
 
+    def handle_cloudflare_verification(self) -> bool:
+        """尝试点击 Cloudflare 的人机验证按钮"""
+        try:
+            button = WebDriverWait(self.driver, 5).until(
+                EC.element_to_be_clickable(
+                    (
+                        By.XPATH,
+                        "//button[contains(., 'Verify') or contains(., '验证')]",
+                    )
+                )
+            )
+            self.driver.execute_script("arguments[0].click();", button)
+            logging.info("已尝试点击 Cloudflare 人机验证按钮")
+            WebDriverWait(self.driver, 15).until(
+                lambda d: d.execute_script('return document.readyState') == 'complete'
+            )
+            time.sleep(2)
+            return True
+        except TimeoutException:
+            return False
+        except Exception as e:
+            logging.error(f"处理 Cloudflare 验证时发生错误: {e}")
+            return False
+
     def create_driver(self):
         try:
             service = Service(chromedriver_path)
@@ -262,6 +286,7 @@ class LinuxDoBrowser:
                 })
 
             self.driver.get("https://linux.do/login")
+            self.handle_cloudflare_verification()
             WebDriverWait(self.driver, 15).until(
                 lambda d: d.execute_script('return document.readyState') == 'complete'
             )
@@ -337,6 +362,7 @@ class LinuxDoBrowser:
                         self.driver.set_page_load_timeout(10)  # 设置页面加载超时时间
                         try:
                             self.driver.get(article_url)
+                            self.handle_cloudflare_verification()
                         except TimeoutException:
                             logging.warning(f"加载帖子超时: {article_title}")
                             raise  # 重新抛出异常，让外层catch处理
@@ -410,6 +436,7 @@ class LinuxDoBrowser:
             self.driver.switch_to.window(self.driver.window_handles[-1])
             logging.info("导航到LINUX DO Connect页面")
             self.driver.get(CONNECT_URL)
+            self.handle_cloudflare_verification()
 
             global connect_info
 
@@ -548,6 +575,7 @@ class LinuxDoBrowser:
 
                 logging.info("导航到 LINUX DO 首页")
                 self.driver.get(HOME_URL)
+                self.handle_cloudflare_verification()
 
                 logged_in = False
                 if self.cookie:
