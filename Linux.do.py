@@ -248,7 +248,7 @@ class LinuxDoBrowser:
             return False
 
     def login_with_cookie(self, cookie_str: str) -> bool:
-        """使用提供的 cookie 登录"""
+        """使用提供的 cookie 登录并通过页面跳转验证结果"""
         try:
             for pair in [c.strip() for c in cookie_str.split(';') if c.strip()]:
                 if '=' not in pair:
@@ -260,12 +260,22 @@ class LinuxDoBrowser:
                     'path': '/',
                     'domain': 'linux.do',
                 })
-            self.driver.refresh()
-            WebDriverWait(self.driver, 10).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "#current-user"))
+
+            self.driver.get("https://linux.do/login")
+            WebDriverWait(self.driver, 15).until(
+                lambda d: d.execute_script('return document.readyState') == 'complete'
             )
-            logging.info("Cookie 登录成功")
-            return True
+            time.sleep(3)
+            final_url = self.driver.current_url
+            time.sleep(2)
+            final_url = self.driver.current_url
+
+            if final_url.startswith("https://linux.do") and "login" not in final_url:
+                logging.info("Cookie 登录成功")
+                return True
+
+            logging.error(f"Cookie 登录失败，当前地址: {final_url}")
+            return False
         except Exception as e:
             logging.error(f"Cookie 登录失败: {e}")
             return False
@@ -370,97 +380,6 @@ class LinuxDoBrowser:
         except Exception as e:
             logging.error(f"click_topic 方法发生错误: {e}")
 
-    def run(self):
-        """主运行函数"""
-        global browse_count
-        global connect_info
-        global like_count
-
-        for i in range(user_count):
-            start_time = time.time()
-            self.username = USERNAME[i] if i < len(USERNAME) else f"账号{i + 1}"
-            self.password = PASSWORD[i] if i < len(PASSWORD) else ""
-            self.cookie = COOKIES[i] if i < len(COOKIES) else None
-
-            logging.info(f"▶️▶️▶️  开始执行第{i + 1}个账号: {self.username}")
-
-            try:
-                # 初始化 WebDriver
-                self.driver = webdriver.Chrome(
-                    service=Service(chromedriver_path), options=chrome_options
-                )
-                logging.info("导航到 LINUX DO 首页")
-                self.driver.get(HOME_URL)
-
-                logged_in = False
-                if self.cookie:
-                    logged_in = self.login_with_cookie(self.cookie)
-                    if not logged_in:
-                        logging.info("Cookie 登录失败，尝试账号密码登录")
-
-                # 登录
-                if not logged_in:
-                    if not self.password:
-                        logging.error(f"{self.username} 未提供密码，无法登录")
-                        continue
-                    if not self.login():
-                        logging.error(f"{self.username} 登录失败")
-                        continue
-
-                # 浏览帖子
-                self.click_topic()
-                logging.info(f"🎉 恭喜：{self.username}，帖子浏览全部完成")
-                # 获取 Connect 信息
-                self.print_connect_info()
-
-                # 登出
-                self.logout()
-
-            except WebDriverException as e:
-                logging.error(f"WebDriver 初始化失败: {e}")
-                logging.info("请尝试重新搭建青龙面板或换个机器运行, 更新Chrome和chromedriver")
-                exit(1)
-            except Exception as e:
-                logging.error(f"运行过程中出错: {e}")
-            finally:
-                if self.driver is not None:
-                    self.driver.quit()
-
-            end_time = time.time()
-            spend_time = int((end_time - start_time) // 60)
-
-            # 记录账户信息
-            account_info.append(
-                {
-                    "username": self.username,
-                    "browse_count": browse_count,
-                    "like_count": like_count,
-                    "spend_time": spend_time,
-                    "connect_info": connect_info,
-                }
-            )
-
-            # 重置状态
-            browse_count = 0
-            like_count = 0
-            connect_info = ""
-
-        logging.info("所有账户处理完毕")
-        # 构建推送信息
-        summary = ""
-        for info in account_info:
-            summary += (
-                f"用户：{info['username']}\n\n"
-                f"本次共浏览 {info['browse_count']} 个帖子\n"
-                f"共点赞{info['like_count']} 个帖子\n"
-                f"共用时 {info['spend_time']} 分钟\n"
-                f"{info['connect_info']}\n\n"
-            )
-        send = load_send()
-        if callable(send):
-            send("Linux.do浏览帖子", summary)
-        else:
-            print("\n通知推送失败")
 
     def click_like(self):
         try:
